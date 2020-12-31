@@ -1,0 +1,15 @@
+name: FactionsScoreboard
+version: ${project.version}
+main: com.evancolewright.factionsscoreboard.FactionsScoreboard
+api-version: 1.16
+depend: [ Factions ]
+authors: [ evancolewright ]
+description: A simple faction's scoreboard that displays online factions members.
+commands:
+  factionscoreboard:
+    permission: factionsscoreboard.toggle
+    aliases:
+      - factionsscoreboard
+      - fboard
+      - fsb
+      - fs

@@ -1,0 +1,32 @@
+# FactionsScoreboard
+# v 1.0
+# Official FileConfiguration
+
+scoreboard:
+  enabled: true
+  # Borders for the faction board (when the player has a faction)
+  border:
+    enabled: false  # should it display borders ? if false, no borders will be displayed.
+    both: false  # should this border be displayed on top and bottom?  If false, it will display on just the top.
+    value: "&7&m-----------------------"
+
+  default_border:
+    enabled: false  # should it display borders ? if false, no borders will be displayed.
+    both: false  # should this border be displayed on top and bottom?  If false, it will display on just the top.
+    value: "&7&m-----------------------"
+
+  title:
+    no_faction: "&e&lFactions&8&l.&6&lParty"
+    faction: "&6&l>&e&l {FACTION} &6&l<"
+  prefixes:
+    recruit: "&e"
+    officer: "&a✩ &e"
+    co-leader: "&a✩✩ &e"
+    # This is leader, factionsuuid just has cucked roles :/
+    admin: "&a✩✩✩&e "
+  default_lines:
+    - "&cNo Faction :("
+
+messages:
+  enabled: "&7FactionsScoreboard &aenabled&7!"
+  disabled: "&7FactionsScoreboard &cdisabled&7!"
