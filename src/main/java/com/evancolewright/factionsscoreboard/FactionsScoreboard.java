@@ -2,7 +2,6 @@ package com.evancolewright.factionsscoreboard;
 
 import com.evancolewright.factionsscoreboard.scoreboard.ScoreboardManager;
 import com.evancolewright.factionsscoreboard.utils.ChatUtils;
-import com.evancolewright.factionsscoreboard.utils.FactionsMapHelper;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -15,12 +14,15 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+
 import java.util.logging.Logger;
 
 public final class FactionsScoreboard extends JavaPlugin implements Listener, CommandExecutor
 {
     private final Logger log = getServer().getLogger();
     private final PluginManager pluginManager = getServer().getPluginManager();
+
+    public boolean placeholderAPI = false;
 
     private ScoreboardManager scoreboardManager;
 
@@ -29,10 +31,19 @@ public final class FactionsScoreboard extends JavaPlugin implements Listener, Co
     {
         if (checkFactionsUUID())
         {
+            if (checkPlaceholderAPI())
+            {
+                this.placeholderAPI = true;
+                log.info("PlaceholderAPI found!  It is safe to use placeholders on the scoreboard!");
+            } else
+            {
+                log.warning("PlaceholderAPI not found!  Only use the provided placeholders in the config!");
+            }
             log.info("FactionsUUID found!  If the plugin does not work, please download the most recent version of FactionsUUID!");
             this.pluginManager.registerEvents(this, this);
             this.getCommand("factionscoreboard").setExecutor(this);
             saveDefaultConfig();
+
             // Initialize Scoreboard Manager
             scoreboardManager = new ScoreboardManager(this);
         } else
@@ -53,16 +64,23 @@ public final class FactionsScoreboard extends JavaPlugin implements Listener, Co
         {
             final Player player = (Player) commandSender;
 
-            if (player.hasPermission("factionsscoreboard.toggle"))
+            if (args.length == 0)
             {
                 if (scoreboardManager.toggle(player))
                 {
                     player.sendMessage(ChatUtils.colorize(getConfig().getString("messages.enabled")));
-                    ChatUtils.colorizeList(FactionsMapHelper.getChunksAroundPlayer(player)).forEach(player::sendMessage);
                 } else
                 {
                     player.sendMessage(ChatUtils.colorize(getConfig().getString("messages.disabled")));
-                    ChatUtils.colorizeList(FactionsMapHelper.getChunksAroundPlayer(player)).forEach(player::sendMessage);
+                }
+            } else if (args.length == 1 &&
+                    (args[0].equalsIgnoreCase("reload") || args[0].equalsIgnoreCase("rl")))
+            {
+                if (player.hasPermission("factionsscoreboard.reload"))
+                {
+                    reloadConfig();
+                    scoreboardManager.reloadAll();
+                    player.sendMessage("FactionsScoreboard reloaded!");
                 }
             }
         }
@@ -94,17 +112,22 @@ public final class FactionsScoreboard extends JavaPlugin implements Listener, Co
 
         if (command.contains("/rl") || command.contains("/reload"))
         {
-            event.getPlayer().sendMessage("FactionsScoreboard does not support reload!  All players must relog! ");
+            event.getPlayer().sendMessage("FactionsScoreboard does not support reload! Please use /fsb reload after reloading! ");
         }
 
+    }
+
+    public boolean checkPlaceholderAPI()
+    {
+        return pluginManager.isPluginEnabled("PlaceholderAPI");
     }
 
     /**
      * Soft-check for the existence of ** FactionsUUID **
      * This method is not very stable, so please do not use it in your own plugin as some versions may work differently than others.
      * <p>
-     * For example, in a recent-ish version, The role enum was completely changed causing
-     * errors on the older API.
+     * For example, in a recent-ish version, The 'Role' enum was completely changed causing
+     * errors when compiling with the previous API ;(.
      *
      * @return If factions exists or not.
      */

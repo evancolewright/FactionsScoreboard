@@ -13,7 +13,7 @@ import java.util.*;
 public class MapSorter<K, T extends Comparable<T>>
 {
     private final Map<K, T> map;
-    private Order order;
+    private final Order order;
 
     public MapSorter(Map<K, T> map)
     {

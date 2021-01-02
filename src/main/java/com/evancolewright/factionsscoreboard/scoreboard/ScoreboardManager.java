@@ -3,14 +3,11 @@ package com.evancolewright.factionsscoreboard.scoreboard;
 import com.evancolewright.factionsscoreboard.FactionsScoreboard;
 import com.evancolewright.factionsscoreboard.utils.ChatUtils;
 import com.evancolewright.factionsscoreboard.utils.FactionsHelper;
-import com.evancolewright.factionsscoreboard.utils.FactionsMapHelper;
 import com.evancolewright.factionsscoreboard.utils.MapSorter;
 import com.massivecraft.factions.*;
-import com.massivecraft.factions.perms.Relation;
 import fr.mrmicky.fastboard.FastBoard;
+import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
@@ -18,12 +15,14 @@ import java.util.*;
 
 public final class ScoreboardManager
 {
+    private final FactionsScoreboard plugin;
     private final FileConfiguration config;
 
-    public final Map<UUID, FastBoard> scoreboards = new HashMap<>();
+    private final Map<UUID, FastBoard> scoreboards = new HashMap<>();
 
     public ScoreboardManager(FactionsScoreboard plugin)
     {
+        this.plugin = plugin;
         this.config = plugin.getConfig();
 
         if (config.getBoolean("scoreboard.enabled"))
@@ -32,30 +31,27 @@ public final class ScoreboardManager
 
     public void updateScoreboard(FastBoard board)
     {
-        java.lang.String title = !FactionsHelper.hasFaction(board.getPlayer())
-                ? ChatUtils.colorize(config.getString("scoreboard.title.no_faction"))
-                : ChatUtils.colorize(config.getString("scoreboard.title.faction")
-                .replace("{FACTION}", FactionsHelper.getFaction(board.getPlayer()).getTag()));
+        Player player = board.getPlayer();
+        board.updateTitle(getTitle(player));
 
-        board.updateTitle(title);
-
-        if (FactionsHelper.hasFaction(board.getPlayer()))
+        if (FactionsHelper.hasFaction(player))
         {
-            board.updateLines(ChatUtils.colorizeList(this.getLines(FPlayers.getInstance().getByPlayer(board.getPlayer()))));
+            board.updateLines(ChatUtils.colorizeList(this.getLines(FPlayers.getInstance().getByPlayer(player))));
         } else
         {
             List<String> lines = new ArrayList<>();
+            List<String> configLines = config.getStringList("scoreboard.default_lines");
 
-            if (config.getBoolean("scoreboard.default_border.enabled"))
+            configLines.forEach(line ->
             {
-                lines.add(ChatUtils.colorize(config.getString("scoreboard.default_border.value")));
-            }
-            lines.addAll(config.getStringList("scoreboard.default_lines"));
-
-            if (config.getBoolean("scoreboard.default_border.enabled") && config.getBoolean("scoreboard.default_border.both"))
-            {
-                lines.add(ChatUtils.colorize(config.getString("scoreboard.default_border.value")));
-            }
+                if (line.contains("{MAP}"))
+                {
+                    lines.addAll(getChunksAroundPlayer(player));
+                } else
+                {
+                    lines.add(plugin.placeholderAPI ? PlaceholderAPI.setPlaceholders(player, line) : line);
+                }
+            });
             board.updateLines(ChatUtils.colorizeList(lines));
         }
     }
@@ -73,17 +69,31 @@ public final class ScoreboardManager
         }
     }
 
+    /**
+     * Reloads all scoreboards and the
+     * configuration file for easy in-game editing
+     */
+    public void reloadAll()
+    {
+        this.scoreboards.clear();
+        plugin.reloadConfig();
+        plugin.saveConfig();
+        Bukkit.getOnlinePlayers().forEach(this::add);
+    }
+
     public void add(Player player)
     {
         FastBoard board = new FastBoard(player);
+        board.updateTitle(getTitle(player));
+        scoreboards.put(player.getUniqueId(), board);
+    }
 
-        String title = !FactionsHelper.hasFaction(player)
+    private String getTitle(Player player)
+    {
+        return !FactionsHelper.hasFaction(player)
                 ? ChatUtils.colorize(config.getString("scoreboard.title.no_faction"))
                 : ChatUtils.colorize(config.getString("scoreboard.title.faction")
                 .replace("{FACTION}", FactionsHelper.getFaction(player).getTag()));
-
-        board.updateTitle(title);
-        scoreboards.put(player.getUniqueId(), board);
     }
 
     public void remove(Player player)
@@ -137,7 +147,7 @@ public final class ScoreboardManager
     }
 
     /**
-     * Formulates the lines to add to the scoreboard.
+     * Formulates the lines to add to the scoreboard (for Faction players).
      *
      * @param fPlayer the owner of the board
      * @return the lines
@@ -146,48 +156,120 @@ public final class ScoreboardManager
     private List<String> getLines(FPlayer fPlayer)
     {
         List<String> lines = new ArrayList<>();
+        List<String> factionLines = config.getStringList("scoreboard.faction_lines");
 
-        if (config.getBoolean("scoreboard.border.enabled"))
+        factionLines.forEach(line ->
         {
-            lines.add(ChatUtils.colorize(config.getString("scoreboard.border.value")));
-        }
-
-        if (FactionsHelper.hasFaction(fPlayer.getPlayer()))
-        {
-            lines.addAll(FactionsMapHelper.getChunksAroundPlayer(fPlayer.getPlayer()));
-            lines.add(" ");
-
-            Map<FPlayer, Integer> myNewMap = getSortedMap(fPlayer.getFaction()).entrySet().stream()
-                    .limit(7)
-                    .collect(HashMap::new, (m, e) -> m.put(e.getKey(), e.getValue()), Map::putAll);
-
-            myNewMap.forEach((player, priority) ->
+            if (line.contains("{MAP}"))
             {
-                String playerName = player.getName();
+                lines.addAll(getChunksAroundPlayer(fPlayer.getPlayer()));
 
-                if (priority == 3)
-                {
-                    lines.add(config.getString("scoreboard.prefixes.admin") + playerName);
-                } else if (priority == 2)
-                {
-                    lines.add(config.getString("scoreboard.prefixes.co-leader") + playerName);
-                } else if (priority == 1)
-                {
-                    lines.add(config.getString("scoreboard.prefixes.officer") + playerName);
-                } else
-                {
-                    lines.add(config.getString("scoreboard.prefixes.recruit") + playerName);
-                }
-            });
-
-            if (config.getBoolean("scoreboard.border.enabled") && config.getBoolean("scoreboard.border.both"))
+            } else if (line.contains("{MEMBERS}"))
             {
-                lines.add(ChatUtils.colorize(config.getString("scoreboard.border.value")));
+                lines.addAll(getFactionMembers(fPlayer));
+            } else
+            {
+                lines.add(plugin.placeholderAPI ? PlaceholderAPI.setPlaceholders(fPlayer.getPlayer(), line) : line);
             }
+        });
+        return ChatUtils.colorizeList(lines);
 
-            return ChatUtils.colorizeList(lines);
-        }
-        return ChatUtils.colorizeList(config.getStringList("scoreboard.default_lines"));
     }
 
+    /**
+     * Get the chunks around the player to draw on the map.
+     * <p>
+     * Please see: https://github.com/Techcable/FactionsUUID/blob/1.6.x/src/main/java/com/massivecraft/factions/zcore/persist/MemoryBoard.java
+     *
+     * @param player the player to draw the map
+     * @return the lines of the scoreboard
+     */
+    private List<String> getChunksAroundPlayer(Player player)
+    {
+        final int height = config.getInt("scoreboard.map.size"), width = config.getInt("scoreboard.map.size");
+        final List<String> lines = new ArrayList<>();
+
+        FPlayer fPlayer = FPlayers.getInstance().getByPlayer(player);
+        FLocation playerLocation = new FLocation(player.getLocation());
+
+        int halfWidth = width / 2;
+        int halfHeight = height / 2;
+        FLocation topLeft = playerLocation.getRelative(-halfWidth, -halfHeight);
+
+        for (int dz = 0; dz < height; dz++)
+        {
+            StringBuilder row = new StringBuilder();
+            String chunkChar = config.getString("scoreboard.map.char");
+            for (int dx = 0; dx < width; dx++)
+            {
+                if (dx == halfWidth && dz == halfHeight)
+                {
+                    row.append(config.getString("scoreboard.map.colors.you")).append(chunkChar);
+                } else
+                {
+                    Faction fh = Board.getInstance().getFactionAt(topLeft.getRelative(dx, dz));
+                    Faction pf = fPlayer.getFaction();
+
+                    if (fh.equals(Factions.getInstance().getWilderness()))
+                    {
+                        row.append(config.getString("scoreboard.map.colors.wilderness")).append(chunkChar);
+                        continue;
+                    }
+
+                    switch (fh.getRelationTo(pf))
+                    {
+                        case ALLY:
+                            row.append(config.getString("scoreboard.map.colors.ally")).append(chunkChar);
+                            break;
+                        case ENEMY:
+                            row.append(config.getString("scoreboard.map.colors.enemy")).append(chunkChar);
+                            break;
+                        case NEUTRAL:
+                            row.append(config.getString("scoreboard.map.colors.neutral")).append(chunkChar);
+                            break;
+                        case MEMBER:
+                            row.append(config.getString("scoreboard.map.colors.your_faction")).append(chunkChar);
+                            break;
+                    }
+                }
+            }
+            String space = fPlayer.hasFaction() ? config.getString("scoreboard.map.center") : config.getString("scoreboard.map.default_center");
+            String line = space + row.toString();
+            lines.add(line);
+        }
+        return lines;
+    }
+
+    /**
+     * Gets the sorted list of faction members and returns in.
+     *
+     * @param fPlayer the player that has the faction
+     * @return the list of all members with their prefixes.
+     */
+
+    private List<String> getFactionMembers(FPlayer fPlayer)
+    {
+        List<String> lines = new ArrayList<>();
+
+        getSortedMap(fPlayer.getFaction()).forEach((player, priority) ->
+        {
+            String playerName = player.getName();
+
+            if (priority == 3)
+            {
+                lines.add(config.getString("scoreboard.prefixes.admin") + playerName);
+            } else if (priority == 2)
+            {
+                lines.add(config.getString("scoreboard.prefixes.co-leader") + playerName);
+            } else if (priority == 1)
+            {
+                lines.add(config.getString("scoreboard.prefixes.officer") + playerName);
+            } else
+            {
+                lines.add(config.getString("scoreboard.prefixes.recruit") + playerName);
+            }
+        });
+
+        return lines;
+    }
 }

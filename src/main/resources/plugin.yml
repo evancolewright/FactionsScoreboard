@@ -3,13 +3,19 @@ version: ${project.version}
 main: com.evancolewright.factionsscoreboard.FactionsScoreboard
 api-version: 1.16
 depend: [ Factions ]
+softdepend:
+  - PlaceholderAPI
 authors: [ evancolewright ]
 description: A simple faction's scoreboard that displays online factions members.
 commands:
   factionscoreboard:
-    permission: factionsscoreboard.toggle
     aliases:
       - factionsscoreboard
       - fboard
       - fsb
       - fs
+      - sb
+      - scoreboard
+permissions:
+  factionsscoreboard.reload:
+    description: Allows the player to reload the scoreboard plugin.
